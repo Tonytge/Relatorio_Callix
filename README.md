@@ -4,17 +4,6 @@ Site estático que recria o dashboard mensal (discadora + receptivo) a partir do
 6 arquivos exportados do Callix/LopesCloud. Tudo roda **no navegador** — nenhum
 arquivo é enviado para nenhum servidor.
 
-## Como publicar no Netlify (uma vez só)
-
-1. Acesse https://app.netlify.com/drop
-2. Arraste esta pasta inteira (`index.html`, `styles.css`, `app.js`) para a área
-   de upload da página.
-3. Pronto — o Netlify gera um link (algo como `nome-aleatorio.netlify.app`).
-   Você pode renomear o site em **Site settings → Change site name** para algo
-   como `lopes-relatorio-discadora.netlify.app`.
-
-Guarde esse link: é ele que você vai abrir todo mês.
-
 ## Como usar todo mês
 
 1. Abra o link do site.
@@ -105,7 +94,3 @@ Guarde esse link: é ele que você vai abrir todo mês.
 - `app.js` — leitura dos arquivos, cálculos e renderização (usa PapaParse,
   SheetJS e Chart.js via CDN, sem build necessário)
 
-Para atualizar o site no futuro (mudar cor, adicionar um KPI, etc.), basta
-editar esses 3 arquivos e arrastar a pasta de novo em
-https://app.netlify.com/drop — o Netlify substitui o site anterior mantendo o
-mesmo link.
