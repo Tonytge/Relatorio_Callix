@@ -4,7 +4,7 @@ Site estático que recria o dashboard mensal (discadora + receptivo) a partir do
 6 arquivos exportados do Callix/LopesCloud. Tudo roda **no navegador** — nenhum
 arquivo é enviado para nenhum servidor.
 
-## Como usar todo mês
+## Como usar todo
 
 1. Abra o link do site.
 2. Arraste os 6 arquivos exportados do Callix/LopesCloud (os mesmos nomes de
