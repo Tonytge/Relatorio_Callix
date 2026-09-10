@@ -626,9 +626,7 @@ function renderTeamRanking() {
       .join('') || `<p style="color:#9CA3AF;font-size:13px;">Sem dados de equipe para exibir.</p>`;
 }
 
-function renderTrendChart() {
-  if (chartLibMissing('trendChart')) return;
-  const { disc, rec } = getDataForTeam(state.activeTeam);
+function buildTrendSeries(disc, rec) {
   const byDay = {};
   const ensureDay = (key) => (byDay[key] = byDay[key] || { comp: 0, leads: 0 });
   disc.forEach((c) => {
@@ -643,15 +641,16 @@ function renderTrendChart() {
     if (!d || !isLead(c.qualificacao)) return;
     ensureDay(dateKey(d)).leads += 1;
   });
-
   const days = Object.keys(byDay).sort();
-  const labels = days.map((k) => dateKeyToBR(k).slice(0, 5));
-  const compData = days.map((k) => byDay[k].comp);
-  const leadsData = days.map((k) => byDay[k].leads);
+  return {
+    labels: days.map((k) => dateKeyToBR(k).slice(0, 5)),
+    comp: days.map((k) => byDay[k].comp),
+    leads: days.map((k) => byDay[k].leads),
+  };
+}
 
-  if (state.trendChart) state.trendChart.destroy();
-  const ctx = document.getElementById('trendChart').getContext('2d');
-  state.trendChart = new Chart(ctx, {
+function trendChartConfig(labels, compData, leadsData) {
+  return {
     type: 'line',
     data: {
       labels,
@@ -665,7 +664,17 @@ function renderTrendChart() {
       plugins: { legend: { position: 'top', labels: { boxWidth: 11, font: { size: 11, family: 'Manrope' } } } },
       scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
     },
-  });
+  };
+}
+
+function renderTrendChart() {
+  if (chartLibMissing('trendChart')) return;
+  const { disc, rec } = getDataForTeam(state.activeTeam);
+  const { labels, comp: compData, leads: leadsData } = buildTrendSeries(disc, rec);
+
+  if (state.trendChart) state.trendChart.destroy();
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  state.trendChart = new Chart(ctx, trendChartConfig(labels, compData, leadsData));
 }
 
 function renderAgentTable() {
@@ -806,9 +815,10 @@ async function fetchCss() {
   }
 }
 
-function pageShell(cssText, periodTag, bodyInner, extraCss = '') {
+function pageShell(cssText, periodTag, bodyInner, extraCss = '', headExtra = '', scriptExtra = '') {
   return `<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório Lopes — ${state.periodLabel}</title>
+${headExtra}
 <style>${cssText}
 .report-screen{padding:0;}
 ${extraCss}
@@ -822,6 +832,7 @@ ${extraCss}
   <div class="period-tag">${periodTag}</div>
 </header>
 <main>${bodyInner}</main>
+${scriptExtra}
 </body></html>`;
 }
 
@@ -841,6 +852,9 @@ async function exportSingleTeamHtml() {
   const restoreSearch = clearSearchFilters();
   renderReport();
 
+  const { disc, rec } = getDataForTeam(state.activeTeam);
+  const trend = buildTrendSeries(disc, rec);
+
   const original = document.getElementById('reportScreen');
   const clone = original.cloneNode(true);
 
@@ -850,21 +864,18 @@ async function exportSingleTeamHtml() {
   const panelsRow = clone.querySelector('.panels-row');
   if (panelsRow) panelsRow.style.gridTemplateColumns = '1fr';
 
-  // canvas não copia o desenho ao clonar — troca pela imagem já renderizada
-  const trendCanvas = document.getElementById('trendChart');
-  const trendClone = clone.querySelector('#trendChart');
-  if (trendCanvas && trendClone) {
-    const img = document.createElement('img');
-    img.src = trendCanvas.toDataURL('image/png');
-    img.style.maxWidth = '100%';
-    trendClone.replaceWith(img);
-  }
-
   clone.querySelectorAll('.toolbar, .team-tabs, input[type=search]').forEach((el) => el.remove());
   clone.hidden = false;
 
   const cssText = await fetchCss();
-  const html = pageShell(cssText, `${state.periodLabel} · ${state.activeTeam}`, clone.innerHTML);
+  const headExtra = `<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>`;
+  // canvas clonado não carrega o desenho junto — recriamos o gráfico de verdade
+  // no arquivo exportado (não uma imagem estática), pra manter o hover/toque
+  // que mostra os valores funcionando igual ao app ao vivo.
+  const scriptExtra = `<script>
+new Chart(document.getElementById('trendChart').getContext('2d'), ${JSON.stringify(trendChartConfig(trend.labels, trend.comp, trend.leads))});
+</script>`;
+  const html = pageShell(cssText, `${state.periodLabel} · ${state.activeTeam}`, clone.innerHTML, '', headExtra, scriptExtra);
   downloadHtml(html, `relatorio-lopes-${state.activeTeam.replace(/\s+/g, '_')}.html`);
 
   restoreSearch();

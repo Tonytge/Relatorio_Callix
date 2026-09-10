@@ -4,7 +4,18 @@ Site estático que recria o dashboard mensal (discadora + receptivo) a partir do
 6 arquivos exportados do Callix/LopesCloud. Tudo roda **no navegador** — nenhum
 arquivo é enviado para nenhum servidor.
 
-## Como usar todo
+## Como publicar no Netlify (uma vez só)
+
+1. Acesse https://app.netlify.com/drop
+2. Arraste esta pasta inteira (`index.html`, `styles.css`, `app.js`) para a área
+   de upload da página.
+3. Pronto — o Netlify gera um link (algo como `nome-aleatorio.netlify.app`).
+   Você pode renomear o site em **Site settings → Change site name** para algo
+   como `lopes-relatorio-discadora.netlify.app`.
+
+Guarde esse link: é ele que você vai abrir todo mês.
+
+## Como usar todo mês
 
 1. Abra o link do site.
 2. Arraste os 6 arquivos exportados do Callix/LopesCloud (os mesmos nomes de
@@ -37,14 +48,17 @@ arquivo é enviado para nenhum servidor.
      estiver ativo no momento — sem gráfico de comparação entre equipes, sem
      senha (é pra mandar direto pro responsável daquela equipe).
    - Com **Todas** selecionado, o site pede pra você **criar uma senha** e
-     baixa um arquivo protegido: só abre com a senha certa. Dentro dele, o
-     diretor tem as mesmas abas de equipe **e o mesmo filtro de período** que
-     você tem aqui — pode explorar qualquer equipe e qualquer intervalo de
-     datas sozinho, sem precisar que você gere um arquivo novo pra cada
-     reunião. Guarde a senha em lugar seguro e passe só pra ele.
+     baixa um arquivo chamado **`index.html`** já pronto pra publicar (ex.: no
+     GitHub Pages) — só abre com a senha certa. Dentro dele, o diretor tem as
+     mesmas abas de equipe **e o mesmo filtro de período** que você tem aqui —
+     pode explorar qualquer equipe e qualquer intervalo de datas sozinho, sem
+     precisar que você gere um arquivo novo pra cada reunião. Guarde a senha
+     em lugar seguro e passe só pra ele.
 8. O **tempo de operação** (tempo logado, pausa, tempo ativo e disponível
    para a discadora) agora aparece direto nas colunas da tabela **Desempenho
-   por agente** — não é mais um painel separado.
+   por agente** — não é mais um painel separado. O KPI **"Tempo ativo total"**
+   soma o tempo ativo de todos os agentes da seleção atual (equipe + período),
+   pra dar uma noção de quanto tempo a equipe/empresa funcionou no total.
 9. O **Ranking de eficiência** mostra os top 10 agentes por % de conversão
    (leads ÷ completadas), com um mínimo de 5 chamadas completadas pra entrar
    no ranking — isso evita que um agente com 1 chamada e 1 lead apareça como
@@ -94,3 +108,7 @@ arquivo é enviado para nenhum servidor.
 - `app.js` — leitura dos arquivos, cálculos e renderização (usa PapaParse,
   SheetJS e Chart.js via CDN, sem build necessário)
 
+Para atualizar o site no futuro (mudar cor, adicionar um KPI, etc.), basta
+editar esses 3 arquivos e arrastar a pasta de novo em
+https://app.netlify.com/drop — o Netlify substitui o site anterior mantendo o
+mesmo link.
