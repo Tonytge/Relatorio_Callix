@@ -815,71 +815,16 @@ async function fetchCss() {
   }
 }
 
-function pageShell(cssText, periodTag, bodyInner, extraCss = '', headExtra = '', scriptExtra = '') {
-  return `<!DOCTYPE html>
-<html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório Lopes — ${state.periodLabel}</title>
-${headExtra}
-<style>${cssText}
-.report-screen{padding:0;}
-${extraCss}
-</style></head>
-<body>
-<header class="topbar">
-  <div class="brand">
-    <span class="brand-mark">L</span>
-    <div class="brand-text"><strong>Lopes Imobiliária</strong><span>Relatório da Discadora &amp; Receptivo</span></div>
-  </div>
-  <div class="period-tag">${periodTag}</div>
-</header>
-<main>${bodyInner}</main>
-${scriptExtra}
-</body></html>`;
-}
-
-// Exportação de UMA equipe específica: não pode levar o gráfico "Leads por
-// equipe" junto, porque ele compara todas as equipes — isso vazaria dados de
-// equipes que o diretor daquela reunião não deveria ver.
-function clearSearchFilters() {
-  const agentSearchEl = document.getElementById('agentSearch');
-  const saved = { agent: agentSearchEl.value };
-  agentSearchEl.value = '';
-  return () => {
-    agentSearchEl.value = saved.agent;
-  };
-}
-
+// Exportação de UMA equipe: mesmo motor interativo da exportação geral (abas
+// de equipe à parte), então o responsável também consegue filtrar por data.
+// O dataset embutido traz SÓ as linhas daquela equipe, e os painéis que
+// comparam equipes ficam de fora.
 async function exportSingleTeamHtml() {
-  const restoreSearch = clearSearchFilters();
-  renderReport();
-
-  const { disc, rec } = getDataForTeam(state.activeTeam);
-  const trend = buildTrendSeries(disc, rec);
-
-  const original = document.getElementById('reportScreen');
-  const clone = original.cloneNode(true);
-
-  clone.querySelector('#teamChartPanel')?.remove();
-  clone.querySelector('#teamRankingPanel')?.remove(); // compara todas as equipes — não pode ir numa exportação de equipe única
-  clone.querySelector('#dateFilterPanel')?.remove();
-  const panelsRow = clone.querySelector('.panels-row');
-  if (panelsRow) panelsRow.style.gridTemplateColumns = '1fr';
-
-  clone.querySelectorAll('.toolbar, .team-tabs, input[type=search]').forEach((el) => el.remove());
-  clone.hidden = false;
-
+  const team = state.activeTeam;
+  const dataset = buildExportDataset(team);
   const cssText = await fetchCss();
-  const headExtra = `<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>`;
-  // canvas clonado não carrega o desenho junto — recriamos o gráfico de verdade
-  // no arquivo exportado (não uma imagem estática), pra manter o hover/toque
-  // que mostra os valores funcionando igual ao app ao vivo.
-  const scriptExtra = `<script>
-new Chart(document.getElementById('trendChart').getContext('2d'), ${JSON.stringify(trendChartConfig(trend.labels, trend.comp, trend.leads))});
-</script>`;
-  const html = pageShell(cssText, `${state.periodLabel} · ${state.activeTeam}`, clone.innerHTML, '', headExtra, scriptExtra);
-  downloadHtml(html, `relatorio-lopes-${state.activeTeam.replace(/\s+/g, '_')}.html`);
-
-  restoreSearch();
-  renderReport();
+  const html = await buildInteractiveHtml({ cssText, dataset, password: null });
+  downloadHtml(html, `relatorio-lopes-${team.replace(/\s+/g, '_')}.html`);
 }
 
 const HTML_PASSWORD_ITERATIONS = 210000;
@@ -948,14 +893,34 @@ function dateKeyFromBR(str) {
 // Monta um dataset compacto (sem nome/telefone de cliente) para embutir no
 // HTML exportado — é isso que dá vida às abas de equipe E ao filtro de
 // período dentro do arquivo estático, sem precisar de mim de novo.
-function buildExportDataset() {
+function buildExportDataset(team) {
+  const single = !!team && team !== 'Todas';
+  const keep = (eq) => !single || eq === team;
+
+  // Total de completadas por dia somando TODOS os agentes da empresa. Precisa
+  // ir junto mesmo num arquivo de uma equipe só: é o denominador do rateio de
+  // "Tentativas (estimado)". Sem isso, num arquivo filtrado o rateio daria
+  // 100% e a equipe apareceria com as tentativas da empresa inteira.
+  const allCompByDay = {};
+  state.agentPerf.forEach((a) => {
+    if (!a.dataDate) return;
+    allCompByDay[a.dataDate] = (allCompByDay[a.dataDate] || 0) + (a.comp || 0);
+  });
+
   return {
-    disc: state.discadoraCalls.map((c) => ({ d: dateKeyFromBR(c.data), op: c.operadorRaw, eq: c.equipe, q: c.qualificacao })),
-    rec: state.receptivoCalls.map((c) => ({ d: dateKeyFromBR(c.data), op: c.operadorRaw, eq: c.equipe, q: c.qualificacao })),
-    agentDays: state.agentPerf.map((a) => ({ lg: a.login, d: a.dataDate, eq: a.equipe, comp: a.comp, tma: a.tmaSec, tot: a.totalSec, pau: a.pausaSec, disp: a.dispSec, oci: a.ociosoSec })),
+    disc: state.discadoraCalls.filter((c) => keep(c.equipe)).map((c) => ({ d: dateKeyFromBR(c.data), op: c.operadorRaw, eq: c.equipe, q: c.qualificacao })),
+    rec: state.receptivoCalls.filter((c) => keep(c.equipe)).map((c) => ({ d: dateKeyFromBR(c.data), op: c.operadorRaw, eq: c.equipe, q: c.qualificacao })),
+    agentDays: state.agentPerf.filter((a) => keep(a.equipe)).map((a) => ({ lg: a.login, d: a.dataDate, eq: a.equipe, comp: a.comp, tma: a.tmaSec, tot: a.totalSec, pau: a.pausaSec, disp: a.dispSec, oci: a.ociosoSec })),
     dailyCamp: state.campanhaRows.map((r) => ({ d: extractRowDate(r), tent: parseNum(r['Tentativas']), comp: parseNum(r['Completadas']), tma: timeToSeconds(r['TMA']) })),
-    dailyRec: state.receptivoRows.map((r) => ({ d: extractRowDate(r), receb: parseNum(r['Recebidas']), atend: parseNum(r['Atendidas']) })),
-    teams: state.teams,
+    dailyRec: single ? [] : state.receptivoRows.map((r) => ({ d: extractRowDate(r), receb: parseNum(r['Recebidas']), atend: parseNum(r['Atendidas']) })),
+    dailyAllComp: Object.keys(allCompByDay).map((d) => ({ d, comp: allCompByDay[d] })),
+    // números oficiais da linha "Totais" do Callix: são o que o app mostra
+    // quando não há filtro de data, então vão junto pro arquivo não divergir
+    // da tela em "Todas"/período completo.
+    officialCamp: state.campanhaTotais ? { ...state.campanhaTotais } : null,
+    officialRec: single || !state.receptivoTotais ? null : { recebidas: state.receptivoTotais.recebidas, atendidas: state.receptivoTotais.atendidas },
+    teams: single ? [team] : state.teams,
+    fixedTeam: single ? team : '',
     period: state.periodLabel,
   };
 }
@@ -973,7 +938,7 @@ function isLead(q){return /^LEAD/i.test((q||'').trim());}
 var QUAL_COLORS=${JSON.stringify(QUAL_COLORS)};
 var DEFAULT_QUAL_COLOR='${DEFAULT_QUAL_COLOR}';
 var MIN_COMP_RANKING=5;
-var activeTeam='Todas', fStart='', fEnd='';
+var activeTeam=DATA.fixedTeam||'Todas', fStart='', fEnd='';
 var teamChartInst=null;
 var agentSort={key:'comp',dir:-1};
 
@@ -1006,26 +971,43 @@ function aggregateAgents(team){
   });
 }
 
+function noDateFilter(){ return !fStart && !fEnd; }
+// Espelha aggregateCampaignTotals/aggregateReceptivoTotals do app: sem filtro
+// de data valem os totais oficiais do Callix; com filtro, soma os dias.
+function campAgg(){
+  if(noDateFilter() && DATA.officialCamp) return DATA.officialCamp;
+  var rows=DATA.dailyCamp.filter(function(r){return inRange(r.d);});
+  var tent=rows.reduce(function(s,r){return s+(r.tent||0);},0);
+  var comp=rows.reduce(function(s,r){return s+(r.comp||0);},0);
+  var wt=rows.reduce(function(s,r){return s+(r.tma||0)*(r.comp||0);},0);
+  return {tentativas:tent, completadas:comp, pctAtendidas:tent?(comp/tent*100):0, tma:secondsToTime(comp?wt/comp:0)};
+}
+function recAgg(){
+  if(noDateFilter() && DATA.officialRec) return DATA.officialRec;
+  var rows=DATA.dailyRec.filter(function(r){return inRange(r.d);});
+  return {recebidas:rows.reduce(function(s,r){return s+(r.receb||0);},0), atendidas:rows.reduce(function(s,r){return s+(r.atend||0);},0)};
+}
+
 function computeKpis(team){
   var disc=filteredCalls(DATA.disc, team), rec=filteredCalls(DATA.rec, team), agents=aggregateAgents(team);
   var completadas=disc.length;
-  var totalCompAllAgents=aggregateAgents('Todas').reduce(function(s,a){return s+a.comp;},0)||1;
+  var totalCompAllAgents=((DATA.dailyAllComp&&DATA.dailyAllComp.length)
+    ? sumDaily(DATA.dailyAllComp,'comp')
+    : aggregateAgents('Todas').reduce(function(s,a){return s+a.comp;},0))||1;
   var compTeamAgents=agents.reduce(function(s,a){return s+a.comp;},0);
-  var rangeTentativas=sumDaily(DATA.dailyCamp,'tent');
-  var tentativas, tma, estimadoTag='';
+  var camp=campAgg();
+  var tentativas, pctAtendidas, tma, estimadoTag='';
   if(team==='Todas'){
-    tentativas=rangeTentativas;
-    var rows=DATA.dailyCamp.filter(function(r){return inRange(r.d);});
-    var wt=rows.reduce(function(s,r){return s+(r.tma||0)*(r.comp||0);},0);
-    var w=rows.reduce(function(s,r){return s+(r.comp||0);},0);
-    tma=secondsToTime(w?wt/w:0);
+    tentativas=camp.tentativas;
+    pctAtendidas=camp.pctAtendidas;
+    tma=camp.tma;
   } else {
-    tentativas=Math.round(rangeTentativas*(compTeamAgents/totalCompAllAgents));
+    tentativas=Math.round(camp.tentativas*(compTeamAgents/totalCompAllAgents));
+    pctAtendidas=tentativas?(completadas/tentativas*100):0;
     var wt2=agents.reduce(function(s,a){return s+a.tmaSec*a.comp;},0);
     tma=secondsToTime(compTeamAgents?wt2/compTeamAgents:0);
     estimadoTag=' (estimado)';
   }
-  var pctAtendidas=tentativas?(completadas/tentativas*100):0;
   var semQual=disc.filter(function(c){return c.q==='Chamada sem qualificação';}).length;
   var caiu=disc.filter(function(c){return c.q==='Chamada caiu';}).length;
   var contatoEfetivo=completadas-semQual-caiu;
@@ -1033,13 +1015,14 @@ function computeKpis(team){
   var leadsRec=rec.filter(function(c){return isLead(c.q);}).length;
   var leadsTotal=leadsDisc+leadsRec;
   var conv=completadas?(leadsTotal/completadas*100):0;
-  var recAtendidas = team==='Todas'? sumDaily(DATA.dailyRec,'atend') : rec.length;
-  var recRecebidas = team==='Todas'? sumDaily(DATA.dailyRec,'receb') : null;
+  var recAtendidas = team==='Todas'? recAgg().atendidas : rec.length;
+  var recRecebidas = team==='Todas'? recAgg().recebidas : null;
   return {tentativas:tentativas,completadas:completadas,pctAtendidas:pctAtendidas,tma:tma,estimadoTag:estimadoTag,contatoEfetivo:contatoEfetivo,leadsDisc:leadsDisc,leadsRec:leadsRec,leadsTotal:leadsTotal,conv:conv,recAtendidas:recAtendidas,recRecebidas:recRecebidas};
 }
 
 function buildTeamTabs(){
-  var wrap=document.getElementById('teamTabs'); wrap.innerHTML='';
+  var wrap=document.getElementById('teamTabs'); if(!wrap) return; wrap.innerHTML='';
+  if(DATA.fixedTeam){ return; } // arquivo de uma equipe só: sem abas de outras equipes
   ['Todas'].concat(DATA.teams).forEach(function(name){
     var btn=document.createElement('button');
     btn.className='team-tab'+(name===activeTeam?' active':'');
@@ -1171,7 +1154,9 @@ function updateDateStatus(){
   var statusEl=document.getElementById('dateFilterStatus');
   var label = (fStart||fEnd) ? ('Analisando: '+(fStart?fStart.split('-').reverse().join('/'):'início')+' – '+(fEnd?fEnd.split('-').reverse().join('/'):'fim')) : ('Período completo: '+DATA.period);
   if(statusEl) statusEl.textContent=label;
-  document.getElementById('periodTagExp').textContent = (fStart||fEnd) ? label.replace('Analisando: ','') : DATA.period;
+  var tag=(fStart||fEnd) ? label.replace('Analisando: ','') : DATA.period;
+  if(DATA.fixedTeam) tag += ' · '+DATA.fixedTeam;
+  document.getElementById('periodTagExp').textContent = tag;
 }
 
 function renderAll(){
@@ -1210,8 +1195,58 @@ renderAll();
 `;
 }
 
-async function buildProtectedInteractiveHtml({ cssText, dataset, password }) {
-  const payload = await encryptProtectedPayload(dataset, password);
+// Corpo do relatório usado nos DOIS tipos de exportação. `single` = arquivo de
+// uma equipe só: sai sem abas de equipe e sem os painéis que comparam equipes
+// (senão vazaria os números das outras para o responsável daquela equipe).
+function buildExportBodyInner(single) {
+  const teamPanels = single
+    ? ''
+    : `
+<div class="panel">
+  <div class="panel-head"><h3>Ranking de equipes</h3><span class="table-note" style="padding:0;">ordenado por % de conversão</span></div>
+  <div id="teamRankingList" class="ranking-list"></div>
+</div>`;
+
+  const qualRow = single
+    ? `<div class="panel"><h3>Qualificação das chamadas completadas</h3><div id="qualList" class="qual-list"></div></div>`
+    : `<div class="panels-row">
+  <div class="panel"><h3>Qualificação das chamadas completadas</h3><div id="qualList" class="qual-list"></div></div>
+  <div class="panel"><h3>Leads por equipe</h3><div id="teamBars"></div></div>
+</div>`;
+
+  return `
+<div class="toolbar">
+  <div class="team-tabs" id="teamTabs"></div>
+  <div class="toolbar-actions"><button id="printBtn" class="btn-ghost" type="button">Imprimir / Salvar PDF</button></div>
+</div>
+<div class="date-filter panel" id="dateFilterPanel">
+  <div class="panel-head">
+    <div><h3>Filtro de período</h3><span class="table-note" style="padding:0;">Selecione um intervalo para comparar dias ou analisar uma data específica.</span></div>
+    <button id="clearDateFilterBtn" class="btn-ghost" type="button">Mostrar período completo</button>
+  </div>
+  <div class="date-filter-fields">
+    <label>Data inicial<input type="date" id="startDateFilter"></label>
+    <label>Data final<input type="date" id="endDateFilter"></label>
+    <span id="dateFilterStatus" class="date-filter-status"></span>
+  </div>
+</div>
+<div class="kpi-grid" id="kpiGrid"></div>
+<div class="panel"><h3>Tendência diária</h3><div class="chart-wrap"><canvas id="trendChart"></canvas></div></div>
+${qualRow}
+${teamPanels}
+<div class="panel">
+  <div class="panel-head"><h3 id="rankingTitle">Ranking de eficiência</h3><span class="table-note" style="padding:0;">mínimo 5 chamadas completadas · ordenado por % de conversão</span></div>
+  <div id="rankingList" class="ranking-list"></div>
+</div>
+<div class="panel">
+  <div class="panel-head"><h3>Desempenho por agente</h3><input type="search" id="agentSearch" placeholder="Buscar agente..."></div>
+  <div class="table-scroll"><table id="agentTable"><thead><tr><th data-sort="login">Agente</th><th data-sort="equipe">Equipe</th><th data-sort="comp">Completadas</th><th data-sort="leads">Leads</th><th data-sort="convPct">% Conversão</th><th data-sort="tma">TMA</th><th data-sort="ativoSec">Tempo ativo</th><th data-sort="dispSec">Disponível</th><th data-sort="pausaPct">% Pausa</th><th data-sort="ociosoPct">% Ocioso</th></tr></thead><tbody></tbody></table></div>
+</div>`;
+}
+
+async function buildInteractiveHtml({ cssText, dataset, password }) {
+  const single = !!dataset.fixedTeam;
+  const payload = password ? await encryptProtectedPayload(dataset, password) : null;
   const extraCss = `
 .team-bar-row{display:flex;align-items:center;gap:10px;padding:7px 0;}
 .team-bar-label{width:80px;font-size:13px;color:var(--graphite-soft);flex-shrink:0;}
@@ -1230,51 +1265,14 @@ async function buildProtectedInteractiveHtml({ cssText, dataset, password }) {
 .protected-error{min-height:18px;margin-top:10px;color:var(--crimson-dark);font-size:12.5px;font-weight:600;}
 .report-screen{padding:0;}`;
 
-  const bodyInner = `
-<div class="toolbar">
-  <div class="team-tabs" id="teamTabs"></div>
-  <div class="toolbar-actions"><button id="printBtn" class="btn-ghost" type="button">Imprimir / Salvar PDF</button></div>
-</div>
-<div class="date-filter panel" id="dateFilterPanel">
-  <div class="panel-head">
-    <div><h3>Filtro de período</h3><span class="table-note" style="padding:0;">Selecione um intervalo para comparar dias ou analisar uma data específica.</span></div>
-    <button id="clearDateFilterBtn" class="btn-ghost" type="button">Mostrar período completo</button>
-  </div>
-  <div class="date-filter-fields">
-    <label>Data inicial<input type="date" id="startDateFilter"></label>
-    <label>Data final<input type="date" id="endDateFilter"></label>
-    <span id="dateFilterStatus" class="date-filter-status"></span>
-  </div>
-</div>
-<div class="kpi-grid" id="kpiGrid"></div>
-<div class="panel"><h3>Tendência diária</h3><div class="chart-wrap"><canvas id="trendChart"></canvas></div></div>
-<div class="panels-row">
-  <div class="panel"><h3>Qualificação das chamadas completadas</h3><div id="qualList" class="qual-list"></div></div>
-  <div class="panel"><h3>Leads por equipe</h3><div id="teamBars"></div></div>
-</div>
-<div class="panel">
-  <div class="panel-head"><h3>Ranking de equipes</h3><span class="table-note" style="padding:0;">ordenado por % de conversão</span></div>
-  <div id="teamRankingList" class="ranking-list"></div>
-</div>
-<div class="panel">
-  <div class="panel-head"><h3 id="rankingTitle">Ranking de eficiência</h3><span class="table-note" style="padding:0;">mínimo 5 chamadas completadas · ordenado por % de conversão</span></div>
-  <div id="rankingList" class="ranking-list"></div>
-</div>
-<div class="panel">
-  <div class="panel-head"><h3>Desempenho por agente</h3><input type="search" id="agentSearch" placeholder="Buscar agente..."></div>
-  <div class="table-scroll"><table id="agentTable"><thead><tr><th data-sort="login">Agente</th><th data-sort="equipe">Equipe</th><th data-sort="comp">Completadas</th><th data-sort="leads">Leads</th><th data-sort="convPct">% Conversão</th><th data-sort="tma">TMA</th><th data-sort="ativoSec">Tempo ativo</th><th data-sort="dispSec">Disponível</th><th data-sort="pausaPct">% Pausa</th><th data-sort="ociosoPct">% Ocioso</th></tr></thead><tbody></tbody></table></div>
-</div>`;
+  const bodyInner = buildExportBodyInner(single);
 
-  return `<!DOCTYPE html>
-<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Relatório Lopes — Protegido</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-<style>${cssText}
-${extraCss}
-</style></head><body>
-<header class="topbar"><div class="brand"><span class="brand-mark">L</span><div class="brand-text"><strong>Lopes Imobiliária</strong><span>Relatório da Discadora &amp; Receptivo</span></div></div><div class="period-tag" id="periodTagExp"></div></header>
-<section id="protectedScreen" class="protected-screen"><div class="protected-card"><div class="lock-icon">🔒</div><h1>Relatório protegido</h1><p>Este arquivo contém o consolidado geral e os dados de todas as equipes, com filtro de equipe e de período. Digite a senha definida na exportação para abrir.</p><form id="unlockForm" class="protected-form"><input id="unlockPassword" type="password" autocomplete="off" placeholder="Senha do relatório" autofocus><button type="submit">Abrir</button></form><div id="unlockError" class="protected-error"></div></div></section>
-<main id="protectedContent" hidden>${bodyInner}</main>
-<script>
+  const lockScreen = password
+    ? `<section id="protectedScreen" class="protected-screen"><div class="protected-card"><div class="lock-icon">🔒</div><h1>Relatório protegido</h1><p>Este arquivo contém o consolidado geral e os dados de todas as equipes, com filtro de equipe e de período. Digite a senha definida na exportação para abrir.</p><form id="unlockForm" class="protected-form"><input id="unlockPassword" type="password" autocomplete="off" placeholder="Senha do relatório" autofocus><button type="submit">Abrir</button></form><div id="unlockError" class="protected-error"></div></div></section>`
+    : '';
+
+  const bootScript = password
+    ? `<script>
 const ENCRYPTED=${JSON.stringify(payload)};
 let DATA=null;
 const unlockedPayload = async (password) => {
@@ -1302,7 +1300,24 @@ document.getElementById('unlockForm').addEventListener('submit', async function(
   content.hidden=false;
   ${buildExportEngineScript()}
 });
-</script></body></html>`;
+<\/script>`
+    : `<script>
+const DATA=${JSON.stringify(dataset)};
+document.getElementById('protectedContent').hidden=false;
+${buildExportEngineScript()}
+<\/script>`;
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Relatório Lopes${single ? ' — ' + dataset.fixedTeam : ' — Protegido'}</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"><\/script>
+<style>${cssText}
+${extraCss}
+</style></head><body>
+<header class="topbar"><div class="brand"><span class="brand-mark">L</span><div class="brand-text"><strong>Lopes Imobiliária</strong><span>Relatório da Discadora &amp; Receptivo</span></div></div><div class="period-tag" id="periodTagExp"></div></header>
+${lockScreen}
+<main id="protectedContent" hidden>${bodyInner}</main>
+${bootScript}
+</body></html>`;
 }
 
 // Exportação com "Todas" selecionado: o diretor recebe UM arquivo com abas de
@@ -1313,9 +1328,9 @@ async function exportInteractiveHtml() {
   const password = await requestHtmlExportPassword();
   if (!password) return;
 
-  const dataset = buildExportDataset();
+  const dataset = buildExportDataset('Todas');
   const cssText = await fetchCss();
-  const html = await buildProtectedInteractiveHtml({ cssText, dataset, password });
+  const html = await buildInteractiveHtml({ cssText, dataset, password });
   downloadHtml(html, `index.html`);
 }
 

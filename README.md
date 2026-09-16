@@ -43,10 +43,13 @@ Guarde esse link: é ele que você vai abrir todo mês.
 
    O **Exportar HTML** se comporta diferente dependendo da aba selecionada na
    hora do clique:
-   - Com uma **equipe específica** selecionada, baixa um arquivo estático só
-     com os dados daquela equipe, já refletindo o filtro de período que
-     estiver ativo no momento — sem gráfico de comparação entre equipes, sem
-     senha (é pra mandar direto pro responsável daquela equipe).
+   - Com uma **equipe específica** selecionada, baixa um arquivo interativo só
+     com os dados daquela equipe: o responsável também tem o **filtro de
+     período** dentro do arquivo, e pode analisar dia a dia sozinho. Não vai
+     com senha (é pra mandar direto pro responsável daquela equipe) e não leva
+     abas de equipe nem os painéis que comparam equipes — os dados embutidos
+     no arquivo são **apenas** os daquela equipe, então nada das outras vaza,
+     nem no código-fonte.
    - Com **Todas** selecionado, o site pede pra você **criar uma senha** e
      baixa um arquivo chamado **`index.html`** já pronto pra publicar (ex.: no
      GitHub Pages) — só abre com a senha certa. Dentro dele, o diretor tem as
@@ -79,7 +82,10 @@ Guarde esse link: é ele que você vai abrir todo mês.
 - Quando você filtra por equipe, "Tentativas" e "TMA" são **estimados**
   proporcionalmente à participação de cada equipe nas chamadas completadas
   (o Callix não exporta tentativas por operador, só o total geral) — por isso
-  aparece "(estimado)" ao lado desses cards.
+  aparece "(estimado)" ao lado desses cards. Por causa desse rateio, o arquivo
+  exportado de uma equipe leva junto o total **agregado** da empresa por dia
+  (só o número total, nunca o detalhe das outras equipes) — sem ele a conta
+  daria 100% e a equipe apareceria com as tentativas da empresa inteira.
 - "Tempo ativo" = Total − (Pausa + Descanso + Refeição + Banheiro). "Disponível"
   vem direto da coluna "Disponível" do export por usuário — não é mais uma
   estimativa.
