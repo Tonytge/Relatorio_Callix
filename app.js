@@ -703,11 +703,9 @@ function renderAgentTable() {
       <td>${a.tma}</td>
       <td>${a.ativo}</td>
       <td>${a.disponivel}</td>
-      <td>${fmtPct(a.pausaPct)}</td>
-      <td>${fmtPct(a.ociosoPct)}</td>
     </tr>`
     )
-    .join('') || `<tr><td colspan="10" style="color:#9CA3AF;">Nenhum agente encontrado para este período.</td></tr>`;
+    .join('') || `<tr><td colspan="8" style="color:#9CA3AF;">Nenhum agente encontrado para este período.</td></tr>`;
 }
 
 function safe(fn, label) {
@@ -1146,8 +1144,8 @@ function renderAgentTable(){
     return ((av||0)-(bv||0))*dir;
   });
   document.querySelector('#agentTable tbody').innerHTML = rows.map(function(a){
-    return '<tr><td>'+a.login+'</td><td>'+a.equipe+'</td><td>'+fmtInt(a.comp)+'</td><td>'+fmtInt(a.leads)+'</td><td>'+fmtPct(a.convPct)+'</td><td>'+a.tma+'</td><td>'+a.ativo+'</td><td>'+a.disponivel+'</td><td>'+fmtPct(a.pausaPct)+'</td><td>'+fmtPct(a.ociosoPct)+'</td></tr>';
-  }).join('') || '<tr><td colspan="10" style="color:#9CA3AF;">Nenhum agente encontrado para este período.</td></tr>';
+    return '<tr><td>'+a.login+'</td><td>'+a.equipe+'</td><td>'+fmtInt(a.comp)+'</td><td>'+fmtInt(a.leads)+'</td><td>'+fmtPct(a.convPct)+'</td><td>'+a.tma+'</td><td>'+a.ativo+'</td><td>'+a.disponivel+'</td></tr>';
+  }).join('') || '<tr><td colspan="8" style="color:#9CA3AF;">Nenhum agente encontrado para este período.</td></tr>';
 }
 
 function updateDateStatus(){
@@ -1240,7 +1238,7 @@ ${teamPanels}
 </div>
 <div class="panel">
   <div class="panel-head"><h3>Desempenho por agente</h3><input type="search" id="agentSearch" placeholder="Buscar agente..."></div>
-  <div class="table-scroll"><table id="agentTable"><thead><tr><th data-sort="login">Agente</th><th data-sort="equipe">Equipe</th><th data-sort="comp">Completadas</th><th data-sort="leads">Leads</th><th data-sort="convPct">% Conversão</th><th data-sort="tma">TMA</th><th data-sort="ativoSec">Tempo ativo</th><th data-sort="dispSec">Disponível</th><th data-sort="pausaPct">% Pausa</th><th data-sort="ociosoPct">% Ocioso</th></tr></thead><tbody></tbody></table></div>
+  <div class="table-scroll"><table id="agentTable"><thead><tr><th data-sort="login">Agente</th><th data-sort="equipe">Equipe</th><th data-sort="comp">Completadas</th><th data-sort="leads">Leads</th><th data-sort="convPct">% Conversão</th><th data-sort="tma">TMA</th><th data-sort="ativoSec">Tempo ativo</th><th data-sort="dispSec">Disponível</th></tr></thead><tbody></tbody></table></div>
 </div>`;
 }
 
